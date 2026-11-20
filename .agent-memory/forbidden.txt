@@ -1,0 +1,4 @@
+# 合规拦截规则（validate 使用，正则，大小写不敏感）
+# 一行一条，可加前缀 "error:"（默认）或 "warn:"
+# 示例：
+# error: \bexample\.com\b

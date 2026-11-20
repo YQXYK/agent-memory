@@ -13,8 +13,10 @@ Thumbs.db
 *.swp
 *~
 
-# 本地记忆目录（目标项目里由 init 生成，不应提交）
-.agent-memory/
+# 本地记忆目录：根下协议/索引/红线入库，各 agent 私有目录不入库
+.agent-memory/*/
+!.agent-memory/*.md
+!.agent-memory/forbidden.txt
 
 # 环境变量
 .env
