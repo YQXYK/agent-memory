@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { spawn } from 'node:child_process';
@@ -260,7 +261,8 @@ test('MCP: 空的记忆环境变量仍能自动探测项目根', async () => {
     const init = payload(
       await request('tools/call', { name: 'memory_init', arguments: { agent: 'gemini' } }),
     );
-    assert.equal(init.root, root);
+    // macOS 的 /var 是指向 /private/var 的符号链接，子进程的 cwd 会解析成真实路径。
+    assert.equal(init.root, fs.realpathSync(root));
 
     const readBack = payload(
       await request('tools/call', { name: 'memory_read', arguments: {} }),
