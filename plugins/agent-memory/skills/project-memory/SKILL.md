@@ -41,7 +41,7 @@ node <skill-dir>/scripts/cli.mjs init --agent <你的名字>
 
 `<你的名字>` 用小写字母、数字、短横线，例如 `codex`、`workbuddy`、`dsh`。同一个 agent 跨会话用同一个名字，不要每次换。
 
-项目若把记忆目录改了名（默认 `.agent-memory`），所有命令都加 `--dir <目录名>`。
+项目若把记忆目录改了名（默认 `.agent-memory`），工具会自动认出；只有同一项目里存在多个记忆目录时才需要显式加 `--dir <目录名>`。
 
 追加用命令（会校验五字段并自动刷新索引）：
 
@@ -102,7 +102,7 @@ node <skill-dir>/scripts/cli.mjs validate
 
 | 方式 | 适合 | 用法 |
 |---|---|---|
-| CLI | 有 shell 的 agent | `agent-memory read/append/validate` |
+| CLI | 有 shell 的 agent | `agent-memory list/add/build/validate` |
 | MCP | Claude Code、Cursor、Zed 等 | `node scripts/mcp.mjs`，工具名 `memory_read` / `memory_append` / `memory_validate` |
 | 纯 Markdown | 只能读写文件的 agent | 直接按 `PROTOCOL.md` 读写 |
 

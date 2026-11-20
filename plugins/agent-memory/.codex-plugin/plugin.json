@@ -1,17 +1,21 @@
 {
   "name": "agent-memory",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "多 agent 协作项目的分片记忆：每个 agent 独占写自己的目录，工具聚合生成只读索引。不绑定任何 agent。",
   "author": {
-    "name": "agent-memory"
+    "name": "YQXYK",
+    "url": "https://github.com/YQXYK"
   },
+  "homepage": "https://github.com/YQXYK/agent-memory",
+  "repository": "https://github.com/YQXYK/agent-memory",
   "license": "MIT",
   "keywords": [
     "memory",
     "multi-agent",
     "context",
     "handoff",
-    "codex-plugin"
+    "codex-plugin",
+    "mcp"
   ],
   "skills": "./skills/",
   "interface": {

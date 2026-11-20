@@ -1,0 +1,56 @@
+{
+  "name": "agent-memory",
+  "version": "0.2.1",
+  "description": "多 agent 分片项目记忆：每个 agent 独占写自己的目录，工具聚合生成只读索引。支持 CLI / MCP / 纯 Markdown，不绑定任何 agent 或语言。",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "agent-memory": "./plugins/agent-memory/bin/agent-memory.mjs"
+  },
+  "exports": {
+    ".": "./plugins/agent-memory/skills/project-memory/scripts/core.mjs",
+    "./mcp": "./plugins/agent-memory/skills/project-memory/scripts/mcp.mjs"
+  },
+  "files": [
+    "plugins/agent-memory/bin",
+    "plugins/agent-memory/skills",
+    "plugins/agent-memory/templates",
+    "plugins/agent-memory/.codex-plugin",
+    "plugins/agent-memory/.claude-plugin",
+    "plugins/agent-memory/.mcp.json",
+    "plugins/agent-memory/LICENSE",
+    "README.md",
+    "INTEGRATION.md",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YQXYK/agent-memory.git"
+  },
+  "homepage": "https://github.com/YQXYK/agent-memory#readme",
+  "bugs": {
+    "url": "https://github.com/YQXYK/agent-memory/issues"
+  },
+  "author": {
+    "name": "YQXYK",
+    "url": "https://github.com/YQXYK"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test plugins/agent-memory/tests/",
+    "mcp": "node plugins/agent-memory/skills/project-memory/scripts/mcp.mjs"
+  },
+  "keywords": [
+    "memory",
+    "multi-agent",
+    "agent",
+    "context",
+    "handoff",
+    "mcp",
+    "claude",
+    "codex",
+    "cursor"
+  ]
+}

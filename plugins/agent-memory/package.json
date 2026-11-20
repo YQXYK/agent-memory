@@ -1,6 +1,6 @@
 {
   "name": "agent-memory",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "多 agent 分片项目记忆：每个 agent 独占写自己的目录，工具聚合生成只读索引。不绑定任何 agent 或语言。",
   "license": "MIT",
   "type": "module",
@@ -14,10 +14,25 @@
   "files": [
     "bin",
     "skills",
-    ".codex-plugin",
     "templates",
+    ".codex-plugin",
+    ".claude-plugin",
+    ".mcp.json",
     "LICENSE"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YQXYK/agent-memory.git",
+    "directory": "plugins/agent-memory"
+  },
+  "homepage": "https://github.com/YQXYK/agent-memory#readme",
+  "bugs": {
+    "url": "https://github.com/YQXYK/agent-memory/issues"
+  },
+  "author": {
+    "name": "YQXYK",
+    "url": "https://github.com/YQXYK"
+  },
   "engines": {
     "node": ">=18"
   },

@@ -158,3 +158,73 @@ test('MCP: 未知工具与未知方法返回 JSON-RPC 错误', async () => {
     cleanup(root);
   }
 });
+
+test('MCP: 用 AGENT_MEMORY_NAME 时可以不传 agent', async () => {
+  const root = makeProject();
+  const child = spawn(process.execPath, [path.join(scriptsDir, 'mcp.mjs')], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, AGENT_MEMORY_NAME: 'claude' },
+  });
+  child.stdout.setEncoding('utf8');
+
+  let buffer = '';
+  let nextId = 1;
+  const pending = new Map();
+  child.stdout.on('data', (chunk) => {
+    buffer += chunk;
+    let nl;
+    while ((nl = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line) continue;
+      const msg = JSON.parse(line);
+      if (pending.has(msg.id)) {
+        pending.get(msg.id)(msg);
+        pending.delete(msg.id);
+      }
+    }
+  });
+  const request = (method, params) =>
+    new Promise((resolve) => {
+      const id = nextId++;
+      pending.set(id, resolve);
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+    });
+
+  try {
+    await request('initialize', { protocolVersion: '2024-11-05', capabilities: {} });
+    const init = await request('tools/call', { name: 'memory_init', arguments: { root } });
+    assert.equal(JSON.parse(init.result.content[0].text).agent, 'claude');
+
+    const appended = await request('tools/call', {
+      name: 'memory_append',
+      arguments: {
+        root,
+        title: '不传 agent',
+        conclusion: 'c',
+        evidence: 'e:1',
+        impact: 'i',
+        expiry: 'x',
+      },
+    });
+    assert.equal(appended.result.isError, undefined);
+    assert.match(read(path.join(root, '.agent-memory', 'claude', 'conclusions.md')), /不传 agent/);
+  } finally {
+    child.kill();
+    cleanup(root);
+  }
+});
+
+test('MCP: serverInfo 版本来自 package.json', async () => {
+  const root = makeProject();
+  const { child, request } = startServer();
+  try {
+    const init = await request('initialize', { protocolVersion: '2024-11-05', capabilities: {} });
+    assert.equal(init.result.serverInfo.name, 'agent-memory');
+    assert.notEqual(init.result.serverInfo.version, '0.2.0-fallback');
+    assert.match(init.result.serverInfo.version, /^\d+\.\d+\.\d+/);
+  } finally {
+    child.kill();
+    cleanup(root);
+  }
+});

@@ -5,6 +5,7 @@ import {
   normalizeDirName,
   parseArgs,
   parseConclusions,
+  splitUnescaped,
   UsageError,
 } from '../skills/project-memory/scripts/lib.mjs';
 
@@ -87,4 +88,22 @@ test('parseConclusions 报告缺字段、坏状态、坏分类', () => {
   assert.match(messages, /missing field: 证据/);
   assert.match(messages, /unknown 状态/);
   assert.match(messages, /bad category/);
+});
+
+test('splitUnescaped 只在未转义的分隔符处切开', () => {
+  assert.deepEqual(splitUnescaped('a | b | c', '|'), ['a ', ' b ', ' c']);
+  assert.deepEqual(splitUnescaped('a \\| b | c', '|'), ['a | b ', ' c']);
+});
+
+test('parseConclusions 保留标题里的竖线', () => {
+  const text = `## 2026-01-02 | test | a | b
+- 状态: 规则
+- 结论: c
+- 证据: e:1
+- 影响面: i
+- 失效条件: x
+`;
+  const { entries, problems } = parseConclusions(text, 'x.md');
+  assert.equal(problems.length, 0);
+  assert.equal(entries[0].title, 'a | b');
 });

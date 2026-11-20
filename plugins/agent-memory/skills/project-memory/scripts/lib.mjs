@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 export const REQUIRED_FIELDS = ['状态', '结论', '证据', '影响面', '失效条件'];
@@ -89,21 +90,121 @@ export function requireValue(args, key, fallback) {
 /**
  * 从 cwd 向上找项目根：优先 .git，其次记忆目录本身。
  * dirName 必须一起传，否则改了目录名的项目每次都得手写 --root。
+ * probe 为真时，还会识别根下任何名字的记忆目录（用户用 --dir 改过名的项目）。
  */
-export function findRoot(explicit, dirName = DEFAULT_DIR) {
+export function findRoot(explicit, dirName = DEFAULT_DIR, { probe = true } = {}) {
   if (explicit !== undefined && explicit !== null) {
     if (explicit === true || explicit === '') throw new UsageError('--root 需要一个路径');
     return path.resolve(String(explicit));
   }
   const name = normalizeDirName(dirName);
+  const cwd = process.cwd();
+  // 家目录是硬边界：再往上探测只会捡到与项目无关的目录，把别人的记忆区当成自己的。
+  const home = path.resolve(os.homedir());
   let dir = process.cwd();
   for (;;) {
     if (fs.existsSync(path.join(dir, '.git'))) return dir;
     if (fs.existsSync(path.join(dir, name))) return dir;
+    // 已经站在记忆目录里（非 git 项目常见）：项目根就是它的父目录。
+    if (isMemoryDir(dir)) {
+      const parent = path.dirname(dir);
+      return parent === dir ? dir : parent;
+    }
+    if (dir === home) return cwd;
+    if (probe && detectMemoryDir(dir)) return dir;
     const parent = path.dirname(dir);
-    if (parent === dir) return process.cwd();
+    if (parent === dir) return cwd;
     dir = parent;
   }
+}
+
+const SKIP_DIRS = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  'target',
+  'vendor',
+  '.venv',
+  'venv',
+  '__pycache__',
+  '.next',
+  'coverage',
+]);
+
+// 向上探测时每一级都要扫一遍子目录，给个上限免得在用户主目录/盘符根上跑很久。
+const PROBE_MAX_DEPTH = 3;
+const PROBE_LIMIT = 2000;
+
+/**
+ * 只认带 PROTOCOL.md 且标题对得上的目录，避免把随便一个含 PROTOCOL.md 的文档目录
+ * 当成记忆区。默认目录名优先，其次扫描根下直接子目录。
+ */
+export function isMemoryDir(dir) {
+  const protocol = path.join(dir, 'PROTOCOL.md');
+  if (!fs.existsSync(protocol)) return false;
+  try {
+    return readText(protocol).includes('项目记忆协议');
+  } catch {
+    return false;
+  }
+}
+
+export function detectMemoryDir(root) {
+  if (isMemoryDir(path.join(root, DEFAULT_DIR))) return DEFAULT_DIR;
+
+  // 广度优先，浅层优先：默认目录之外还支持 docs/memory 这种嵌套目录名。
+  let queue = [root];
+  let scanned = 0;
+  for (let depth = 1; depth <= PROBE_MAX_DEPTH && queue.length; depth++) {
+    const next = [];
+    const hits = [];
+    for (const dir of queue) {
+      let entries;
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const ent of entries) {
+        if (!ent.isDirectory() || SKIP_DIRS.has(ent.name)) continue;
+        if (++scanned > PROBE_LIMIT) break;
+        const child = path.join(dir, ent.name);
+        // 先看 index.md，一次 stat 就能排除绝大多数无关目录。
+        if (fs.existsSync(path.join(child, 'index.md')) && isMemoryDir(child)) hits.push(child);
+        next.push(child);
+      }
+      if (scanned > PROBE_LIMIT) break;
+    }
+    if (hits.length === 1) return rel(root, hits[0]);
+    if (hits.length > 1) return null;
+    queue = next;
+  }
+  return null;
+}
+
+/**
+ * 按未转义的分隔符切分：标题里允许出现 `\|`，不能因此把一行切成四段。
+ */
+export function splitUnescaped(text, sep) {
+  const out = [];
+  let cur = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '\\' && text[i + 1] === sep) {
+      cur += sep;
+      i++;
+      continue;
+    }
+    if (ch === sep) {
+      out.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  out.push(cur);
+  return out;
 }
 
 // 本地日期，不能用 toISOString：那是 UTC，东八区晚上会差一天。
@@ -194,8 +295,9 @@ export function parseConclusions(text, file) {
     if (line.startsWith('## ')) {
       flushEntry(state, entries, problems);
       const head = line.slice(3).trim();
-      const parts = head.split('|').map((s) => s.trim());
-      if (parts.length !== 3) {
+      const parts = splitUnescaped(head, '|').map((s) => s.trim());
+      // 标题里允许有未转义的 |：多出来的段并回标题，比直接报错宽容。
+      if (parts.length < 3) {
         if (head) problems.push({ file, line: i + 1, message: `heading must be "## <date> | <category> | <title>", got "## ${head}"` });
         continue;
       }
@@ -204,7 +306,7 @@ export function parseConclusions(text, file) {
         line: i + 1,
         date: parts[0],
         category: parts[1],
-        title: parts[2],
+        title: parts.slice(2).join(' | '),
         fields: {},
         status: '',
       };
@@ -266,8 +368,9 @@ export function readForbidden(base) {
     if (!line || line.startsWith('#')) continue;
     let severity = 'error';
     let pattern = line;
-    const m = /^(error|warn)\s*[:：]\s*(.+)$/.exec(line);
+    const m = /^(error|warn)\s*[:：]\s*(.+)$/i.exec(line);
     if (m) { severity = m[1]; pattern = m[2]; }
+    severity = severity.toLowerCase();
     try {
       rules.push({ re: new RegExp(pattern, 'i'), severity, source: pattern, line: i + 1 });
     } catch (err) {

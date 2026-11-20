@@ -16,11 +16,13 @@ import {
   resolveContext,
   validateProject,
 } from './core.mjs';
+import { indexMatches } from './render.mjs';
 
 const require = createRequire(import.meta.url);
 const pkg = (() => {
   try {
-    return require('../../package.json');
+    // scripts/ -> project-memory/ -> skills/ -> 包根
+    return require('../../../package.json');
   } catch {
     return { name: 'agent-memory', version: '0.2.0' };
   }
@@ -33,9 +35,17 @@ const S = {
   properties: {
     root: { type: 'string', description: '项目根目录，省略则从 cwd 向上查找' },
     dir: { type: 'string', description: `记忆目录名，默认 ${DEFAULT_DIR}` },
-    agent: { type: 'string', description: 'agent 名（小写字母/数字/短横线）' },
+    agent: {
+      type: 'string',
+      description: 'agent 名（小写字母/数字/短横线）。省略时用 AGENT_MEMORY_NAME 环境变量',
+    },
   },
 };
+
+// 建议客户端用 AGENT_MEMORY_NAME 固定身份，别让模型每次自己编名字。
+function agentOf(args) {
+  return checkAgentName(args.agent || process.env.AGENT_MEMORY_NAME);
+}
 
 const TOOLS = [
   {
@@ -45,10 +55,10 @@ const TOOLS = [
       type: 'object',
       properties: {
         ...S.properties,
-        agent: { ...S.properties.agent, description: 'agent 名，必填' },
+        agent: S.properties.agent,
         build: { type: 'boolean', description: '是否顺手刷新 index.md，默认 true' },
       },
-      required: ['agent'],
+      required: [],
     },
   },
   {
@@ -71,7 +81,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         ...S.properties,
-        agent: { ...S.properties.agent, description: 'agent 名，必填' },
+        agent: S.properties.agent,
         title: { type: 'string', description: '哪个对象 + 什么事' },
         conclusion: { type: 'string', description: '一句话说清必须怎么做 / 绝不能怎么做' },
         evidence: { type: 'string', description: '路径:行号、提交哈希或测试名' },
@@ -81,7 +91,7 @@ const TOOLS = [
         category: { type: 'string', description: '分类，小写字母/数字/短横线，默认 general' },
         date: { type: 'string', description: 'YYYY-MM-DD，默认今天' },
       },
-      required: ['agent', 'title', 'conclusion', 'evidence', 'impact', 'expiry'],
+      required: ['title', 'conclusion', 'evidence', 'impact', 'expiry'],
     },
   },
   {
@@ -98,7 +108,7 @@ const TOOLS = [
 
 function ctxOf(args = {}) {
   return resolveContext({
-    root: args.root,
+    root: args.root || process.env.AGENT_MEMORY_ROOT,
     dirName: args.dir || process.env.AGENT_MEMORY_DIR || DEFAULT_DIR,
   });
 }
@@ -111,7 +121,7 @@ function text(value) {
 const HANDLERS = {
   memory_init(args) {
     const ctx = ctxOf(args);
-    const agent = checkAgentName(args.agent);
+    const agent = agentOf(args);
     const result = initProject({ ...ctx, agent });
     const built = args.build === false ? null : buildIndex(ctx);
     return text({
@@ -137,7 +147,11 @@ const HANDLERS = {
     });
     if (args.format === 'markdown') {
       const indexFile = path.join(ctx.base, 'index.md');
-      return text(fs.existsSync(indexFile) ? readText(indexFile) : '');
+      const built = buildIndex({ ...ctx, check: true });
+      if (!fs.existsSync(indexFile)) return text(built.rendered);
+      const current = readText(indexFile);
+      // 索引过期时返回现算的结果，别把旧快照当真相喂给模型。
+      return text(indexMatches(built.rendered, current) ? current : built.rendered);
     }
     return text({
       root: ctx.root,
@@ -164,7 +178,7 @@ const HANDLERS = {
     const ctx = ctxOf(args);
     const result = appendConclusion({
       ...ctx,
-      agent: args.agent,
+      agent: agentOf(args),
       date: args.date || localDate(),
       category: args.category || 'general',
       title: args.title,

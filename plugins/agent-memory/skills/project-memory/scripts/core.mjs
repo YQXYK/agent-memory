@@ -6,9 +6,11 @@ import {
   UsageError,
   agentDirs,
   baseDir,
+  detectMemoryDir,
   findRoot,
   isValidDate,
   loadAll,
+  normalizeDirName,
   parseConclusions,
   readForbidden,
   readText,
@@ -91,14 +93,22 @@ export const FORBIDDEN_HEADER = `# 合规拦截规则（validate 使用，正则
 # error: \\bexample\\.com\\b
 `;
 
+/**
+ * 未显式给 --dir 时，允许沿用项目里已有的记忆目录名。
+ * 否则 `init --dir .mem` 之后所有命令都得手写 --dir，等于半个坑。
+ */
 export function resolveContext(options = {}) {
-  const dirName = options.dirName ? String(options.dirName) : DEFAULT_DIR;
-  const root = findRoot(options.root, dirName);
-  const base = options.base ? path.resolve(String(options.base)) : baseDir(root, { dir: dirName });
-  return { root, base, dirName: rel(root, base) || dirName };
+  const explicit = options.dirName ? normalizeDirName(options.dirName) : null;
+  const root = findRoot(options.root, explicit || DEFAULT_DIR);
+  const resolvedName = explicit || detectMemoryDir(root) || DEFAULT_DIR;
+  const base = options.base ? path.resolve(String(options.base)) : baseDir(root, { dir: resolvedName });
+  return { root, base, dirName: rel(root, base) || resolvedName };
 }
 
 export function checkAgentName(agent) {
+  if (agent === undefined || agent === null || agent === '') {
+    throw new UsageError('缺少 agent 名：用 --agent <名字> 或设置 AGENT_MEMORY_NAME');
+  }
   if (typeof agent !== 'string' || !AGENT_RE.test(agent)) {
     throw new UsageError(
       `agent 名不合法: "${agent}"（只允许小写字母、数字、短横线，最长 32）`,
@@ -270,6 +280,11 @@ function oneLineField(value) {
   return String(value || '').replace(/\r?\n/g, ' ').trim();
 }
 
+// 标题里的 | 是分隔符，必须转义，否则整条结论的标题会被截断成多段。
+function headingField(value) {
+  return oneLineField(value).replace(/\|/g, '\\|');
+}
+
 /**
  * 追加一条五字段结论。写入前先用同一套解析器自检，
  * 避免把格式错误的内容写进只增不改的文件。
@@ -287,7 +302,7 @@ export function appendConclusion({ root, base, agent, date, category, title, sta
   if (!oneLineField(title)) throw new UsageError('标题不能为空');
 
   const block = [
-    `## ${date} | ${category} | ${oneLineField(title)}`,
+    `## ${date} | ${category} | ${headingField(title)}`,
     `- 状态: ${oneLineField(status)}`,
     `- 结论: ${oneLineField(conclusion)}`,
     `- 证据: ${oneLineField(evidence)}`,
@@ -299,6 +314,20 @@ export function appendConclusion({ root, base, agent, date, category, title, sta
   const parsed = parseConclusions(block, '<new entry>');
   if (parsed.problems.length) {
     throw new UsageError(`结论格式不合法: ${parsed.problems[0].message}`);
+  }
+
+  // 协议要求新写的文字本身也过红线，所以 add 在落盘前就拦，而不是等 validate 事后报。
+  const hits = [];
+  for (const rule of readForbidden(base)) {
+    if (rule.invalid) {
+      throw new UsageError(`${rel(root, path.join(base, 'forbidden.txt'))}:${rule.line} 正则无效: ${rule.message}`);
+    }
+    if (rule.severity !== 'error') continue;
+    const m = rule.re.exec(block);
+    if (m) hits.push(`/${rule.source}/ → "${m[0]}"`);
+  }
+  if (hits.length) {
+    throw new UsageError(`命中项目禁用规则，未写入: ${hits.join('；')}`);
   }
 
   const dir = path.join(base, agent);

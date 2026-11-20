@@ -37,7 +37,7 @@ const USAGE = `agent-memory — 多 agent 分片项目记忆
   --dir <目录名>  记忆目录名，默认 ${DEFAULT_DIR}
 
 环境变量:
-  AGENT_MEMORY_NAME  默认 agent 名（默认 codex）
+  AGENT_MEMORY_NAME  默认 agent 名（init/add 可省 --agent）
   AGENT_MEMORY_DIR   默认记忆目录名
   AGENT_MEMORY_ROOT  默认项目根
 `;
@@ -51,8 +51,13 @@ const TEMPLATE_DIR = path.resolve(
 );
 
 function context(args) {
-  const dirName = requireValue(args, 'dir', process.env.AGENT_MEMORY_DIR || DEFAULT_DIR);
-  return resolveContext({ root: args.root, dirName });
+  const dirName = requireValue(args, 'dir', process.env.AGENT_MEMORY_DIR || undefined);
+  const root = requireValue(args, 'root', process.env.AGENT_MEMORY_ROOT || undefined);
+  return resolveContext({ root, dirName });
+}
+
+function agentName(args) {
+  return requireValue(args, 'agent', process.env.AGENT_MEMORY_NAME || undefined);
 }
 
 function printFindings(findings) {
@@ -64,7 +69,7 @@ function printFindings(findings) {
 
 function cmdInit(args) {
   const ctx = context(args);
-  const agent = checkAgentName(requireValue(args, 'agent', process.env.AGENT_MEMORY_NAME || 'codex'));
+  const agent = checkAgentName(agentName(args));
   const result = initProject({ ...ctx, agent });
   const show = (f) => rel(ctx.root, f);
 
@@ -126,7 +131,7 @@ function cmdValidate(args) {
 
 function cmdAdd(args) {
   const ctx = context(args);
-  const agent = requireValue(args, 'agent', process.env.AGENT_MEMORY_NAME || 'codex');
+  const agent = checkAgentName(agentName(args));
   const result = appendConclusion({
     ...ctx,
     agent,
@@ -219,11 +224,12 @@ function cmdTemplate(args) {
     console.error(`可用: ${names.join(', ')}`);
     return 2;
   }
-  const agent = args.agent === true ? 'codex' : args.agent || process.env.AGENT_MEMORY_NAME || 'codex';
+  // 没给 agent 就保留占位符，让使用者自己填，别替他猜一个身份。
+  const agent = args.agent || process.env.AGENT_MEMORY_NAME || null;
   const body = fs
     .readFileSync(path.join(TEMPLATE_DIR, match), 'utf8')
-    .replaceAll('<你的名字>', agent)
-    .replaceAll('<你自己的名字>', agent);
+    .replaceAll('<你的名字>', agent ?? '<你的名字>')
+    .replaceAll('<你自己的名字>', agent ?? '<你自己的名字>');
   process.stdout.write(body);
   return 0;
 }

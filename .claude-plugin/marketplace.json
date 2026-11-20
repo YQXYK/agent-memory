@@ -1,0 +1,17 @@
+{
+  "name": "agent-memory",
+  "owner": {
+    "name": "YQXYK",
+    "url": "https://github.com/YQXYK"
+  },
+  "plugins": [
+    {
+      "name": "agent-memory",
+      "source": "./plugins/agent-memory",
+      "description": "多 agent 分片项目记忆：私有写、聚合读，不绑定任何 agent 或语言。",
+      "version": "0.2.1",
+      "category": "developer-tools",
+      "tags": ["memory", "multi-agent", "mcp", "context"]
+    }
+  ]
+}

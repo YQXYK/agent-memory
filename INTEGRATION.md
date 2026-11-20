@@ -14,6 +14,9 @@
 三种方式共用同一个目录，可以混用。没有 Node 也能用：`conclusions.md` 是纯 Markdown，格式对就行，
 `build` 只是把多份文件合成一份视图，不是记忆本身。
 
+`root` / `dir` / `agent` 三个参数在 CLI 与 MCP 里都可省略：`root` 从 cwd 向上找 `.git` 或记忆目录，
+`dir` 会自动认出改过名的目录，`agent` 回落到 `AGENT_MEMORY_NAME`。用环境变量固定身份，比让模型每次传参可靠。
+
 ## 通用接入片段
 
 贴进目标项目的 `AGENTS.md` / `CLAUDE.md` / `.cursor/rules` / 系统提示词，或该 agent 的等价入口文件。
@@ -56,6 +59,13 @@
 ## 各 agent 的最小配置
 
 **Claude Code**
+
+```bash
+/plugin marketplace add YQXYK/agent-memory
+/plugin install agent-memory@agent-memory
+```
+
+插件自带 MCP server，无需再手写配置。不用插件的话，退回下面的 CLI 方式：
 
 ```bash
 node <repo>/plugins/agent-memory/bin/agent-memory.mjs init --agent claude

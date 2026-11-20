@@ -91,6 +91,93 @@ test('--dir 拒绝越界路径', () => {
   }
 });
 
+test('--dir 改名后，不带 --dir 也能从子目录找到记忆区', () => {
+  const root = makeProject();
+  try {
+    assert.equal(run(root, ['init', '--agent', 'claude', '--dir', '.mem']).code, 0);
+
+    const sub = path.join(root, 'src', 'deep');
+    fs.mkdirSync(sub, { recursive: true });
+
+    const listed = run(sub, ['list']);
+    assert.equal(listed.code, 0, listed.stderr);
+
+    const built = run(sub, ['build', '--check']);
+    assert.equal(built.code, 0, built.stderr);
+    assert.match(built.stdout, /最新/);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test('AGENT_MEMORY_ROOT 与 AGENT_MEMORY_DIR 生效', () => {
+  const root = makeProject();
+  try {
+    const env = { AGENT_MEMORY_ROOT: root, AGENT_MEMORY_DIR: '.team-memory' };
+    const init = run(root, ['init', '--agent', 'codex'], { env });
+    assert.equal(init.code, 0, init.stderr);
+    assert.ok(fs.existsSync(path.join(root, '.team-memory', 'index.md')));
+
+    const other = fs.mkdtempSync(path.join(root, 'elsewhere-'));
+    const listed = run(other, ['list'], { env });
+    assert.equal(listed.code, 0, listed.stderr);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test('AGENT_MEMORY_NAME 作为默认 agent 名', () => {
+  const root = makeProject();
+  try {
+    const env = { AGENT_MEMORY_NAME: 'workbuddy' };
+    assert.equal(run(root, ['init'], { env }).code, 0);
+    assert.ok(fs.existsSync(path.join(root, '.agent-memory', 'workbuddy', 'conclusions.md')));
+  } finally {
+    cleanup(root);
+  }
+});
+
+test('没给 agent 时报错，不替使用者猜身份', () => {
+  const root = makeProject();
+  try {
+    const init = run(root, ['init']);
+    assert.equal(init.code, 2);
+    assert.match(init.stderr, /缺少 agent 名/);
+
+    run(root, ['init', '--agent', 'codex']);
+    const added = run(root, ['add', '--title', 't', '--conclusion', 'c', '--evidence', 'e:1', '--impact', 'i', '--expiry', 'x']);
+    assert.equal(added.code, 2);
+
+    const tpl = run(root, ['template', 'system-prompt']);
+    assert.match(tpl.stdout, /<你自己的名字>/);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test('标题里的竖线不会破坏结论结构', () => {
+  const root = makeProject();
+  try {
+    run(root, ['init', '--agent', 'codex']);
+    const r = run(root, [
+      'add', '--agent', 'codex',
+      '--title', 'a | b',
+      '--conclusion', 'c', '--evidence', 'e:1', '--impact', 'i', '--expiry', 'x',
+    ]);
+    assert.equal(r.code, 0, r.stderr);
+
+    const validated = run(root, ['validate']);
+    assert.equal(validated.code, 0, validated.stdout);
+    assert.match(validated.stdout, /1 条结论，0 个错误/);
+
+    const listed = run(root, ['list', '--format', 'json']);
+    const data = JSON.parse(listed.stdout);
+    assert.equal(data.entries[0].title, 'a | b');
+  } finally {
+    cleanup(root);
+  }
+});
+
 test('add 追加五字段结论并刷新索引', () => {
   const root = makeProject();
   try {
@@ -239,6 +326,58 @@ test('validate 拦截 forbidden.txt 规则', () => {
     const r = run(root, ['validate']);
     assert.equal(r.code, 1);
     assert.match(r.stdout, /命中禁用规则/);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test('add 命中禁用规则时不落盘', () => {
+  const root = makeProject();
+  try {
+    run(root, ['init', '--agent', 'codex']);
+    write(path.join(root, '.agent-memory', 'forbidden.txt'), 'WARN: nothing-here\nerror: \\bsecret-token\\b\n');
+    const file = path.join(root, '.agent-memory', 'codex', 'conclusions.md');
+    const before = read(file);
+    const r = run(root, [
+      'add', '--agent', 'codex',
+      '--title', '泄露', '--conclusion', 'secret-token',
+      '--evidence', 'e:1', '--impact', 'i', '--expiry', 'x',
+    ]);
+    assert.equal(r.code, 2);
+    assert.match(r.stderr, /命中项目禁用规则/);
+    assert.equal(read(file), before);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test('forbidden.txt 的 error/warn 前缀大小写不敏感', () => {
+  const root = makeProject();
+  try {
+    run(root, ['init', '--agent', 'codex']);
+    write(path.join(root, '.agent-memory', 'forbidden.txt'), 'WARN: \\bcareful\\b\n');
+    write(
+      path.join(root, '.agent-memory', 'codex', 'conclusions.md'),
+      '## 2026-01-01 | test | 提醒\n- 状态: 规则\n- 结论: careful\n- 证据: e:1\n- 影响面: i\n- 失效条件: x\n',
+    );
+    const r = run(root, ['validate']);
+    assert.equal(r.code, 0, 'warn 不应让 validate 失败');
+    assert.match(r.stdout, /^WARN/m);
+    assert.match(r.stdout, /命中禁用规则/);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test('非 git 项目里从记忆目录内部也能找到根', () => {
+  const root = makeProject();
+  try {
+    fs.rmSync(path.join(root, '.git'), { recursive: true, force: true });
+    assert.equal(run(root, ['init', '--agent', 'codex']).code, 0);
+    const inside = path.join(root, '.agent-memory');
+    const listed = run(inside, ['list']);
+    assert.equal(listed.code, 0, listed.stderr);
+    assert.equal(run(inside, ['build', '--check']).code, 0);
   } finally {
     cleanup(root);
   }

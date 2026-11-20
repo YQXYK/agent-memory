@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: 单元测试
+        run: node --test plugins/agent-memory/tests/
+
+      - name: 端到端冒烟（建结构 → 追加 → 校验 → 索引一致）
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          cd "$work"
+          git init -q .
+          cli="$GITHUB_WORKSPACE/plugins/agent-memory/bin/agent-memory.mjs"
+
+          node "$cli" init --agent ci
+          node "$cli" add --agent ci \
+            --title "CI 冒烟" \
+            --conclusion "索引由 build 生成" \
+            --evidence ".github/workflows/ci.yml:1" \
+            --impact "记忆目录" \
+            --expiry "生成方式改变"
+          node "$cli" build --check
+          node "$cli" validate --strict
+
+      - name: 索引可复现（--check 在干净克隆上通过）
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          cd "$work"
+          git init -q .
+          cli="$GITHUB_WORKSPACE/plugins/agent-memory/bin/agent-memory.mjs"
+          node "$cli" init --agent ci
+          cp .agent-memory/index.md first.md
+          node "$cli" build
+          diff -u first.md .agent-memory/index.md
+
+  lint:
+    name: 语法与清单
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 语法检查
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do node --check "$f"; done < <(git ls-files '*.mjs')
+
+      - name: 清单 JSON 可解析
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do
+            node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$f"
+          done < <(git ls-files '*.json')
+
+      - name: 版本号一致
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=$(node -p "require('./package.json').version")
+          pkg=$(node -p "require('./plugins/agent-memory/package.json').version")
+          codex=$(node -p "require('./plugins/agent-memory/.codex-plugin/plugin.json').version")
+          claude=$(node -p "require('./plugins/agent-memory/.claude-plugin/plugin.json').version")
+          echo "root=$root pkg=$pkg codex=$codex claude=$claude"
+          test "$root" = "$pkg" && test "$root" = "$codex" && test "$root" = "$claude"
+
+      - name: 行尾统一 LF
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -Il $'\r' -- . ':!*.png' ':!*.jpg'; then
+            echo "发现 CRLF 行尾" >&2
+            exit 1
+          fi
