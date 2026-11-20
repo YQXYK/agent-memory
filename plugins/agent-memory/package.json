@@ -1,0 +1,35 @@
+{
+  "name": "agent-memory",
+  "version": "0.2.0",
+  "description": "多 agent 分片项目记忆：每个 agent 独占写自己的目录，工具聚合生成只读索引。不绑定任何 agent 或语言。",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "agent-memory": "./bin/agent-memory.mjs"
+  },
+  "exports": {
+    ".": "./skills/project-memory/scripts/core.mjs",
+    "./mcp": "./skills/project-memory/scripts/mcp.mjs"
+  },
+  "files": [
+    "bin",
+    "skills",
+    ".codex-plugin",
+    "templates",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test tests/",
+    "mcp": "node skills/project-memory/scripts/mcp.mjs"
+  },
+  "keywords": [
+    "memory",
+    "multi-agent",
+    "context",
+    "handoff",
+    "mcp"
+  ]
+}

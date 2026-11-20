@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "agent-memory": {
+      "command": "node",
+      "args": ["<绝对路径>/plugins/agent-memory/skills/project-memory/scripts/mcp.mjs"],
+      "env": {
+        "AGENT_MEMORY_NAME": "cursor"
+      }
+    }
+  }
+}

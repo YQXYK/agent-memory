@@ -1,0 +1,12 @@
+## 项目记忆
+
+本项目的跨会话记忆在 `.agent-memory/`。开工先读 `.agent-memory/index.md`（`待修` 优先），
+收工只往 `.agent-memory/claude/conclusions.md` 追加五字段结论，不改别人的目录、不手改 `index.md`。
+
+已配置 MCP 时用这些工具，不要自己拼路径：
+
+- `memory_read`：读全部结论，可按 `status` / `area` 过滤
+- `memory_append`：追加一条结论并刷新索引
+- `memory_validate`：格式与合规自检
+
+未配置 MCP 时用命令行：`agent-memory add --agent claude --title ... --conclusion ... --evidence ... --impact ... --expiry ...`
