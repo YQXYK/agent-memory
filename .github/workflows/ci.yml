@@ -26,7 +26,7 @@ jobs:
           node-version: ${{ matrix.node }}
 
       - name: 单元测试
-        run: node --test plugins/agent-memory/tests/
+        run: node scripts/test.mjs
 
       - name: 端到端冒烟（建结构 → 追加 → 校验 → 索引一致）
         shell: bash
@@ -56,9 +56,9 @@ jobs:
           git init -q .
           cli="$GITHUB_WORKSPACE/plugins/agent-memory/bin/agent-memory.mjs"
           node "$cli" init --agent ci
-          cp .agent-memory/index.md first.md
+          node "$cli" build --check
           node "$cli" build
-          diff -u first.md .agent-memory/index.md
+          node "$cli" build --check
 
   lint:
     name: 语法与清单
@@ -92,8 +92,13 @@ jobs:
           pkg=$(node -p "require('./plugins/agent-memory/package.json').version")
           codex=$(node -p "require('./plugins/agent-memory/.codex-plugin/plugin.json').version")
           claude=$(node -p "require('./plugins/agent-memory/.claude-plugin/plugin.json').version")
-          echo "root=$root pkg=$pkg codex=$codex claude=$claude"
-          test "$root" = "$pkg" && test "$root" = "$codex" && test "$root" = "$claude"
+          market=$(node -p "require('./.claude-plugin/marketplace.json').plugins[0].version")
+          gemini=$(node -p "require('./gemini-extension.json').version")
+          portable=$(node -p "require('./plugins/agent-memory/plugin.json').version")
+          echo "root=$root pkg=$pkg codex=$codex claude=$claude market=$market gemini=$gemini portable=$portable"
+          test "$root" = "$pkg" && test "$root" = "$codex" && test "$root" = "$claude" \
+            && test "$root" = "$market" && test "$root" = "$gemini" \
+            && test "$root" = "$portable"
 
       - name: 行尾统一 LF
         shell: bash

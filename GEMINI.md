@@ -1,0 +1,20 @@
+# 项目记忆
+
+项目记忆在 `.agent-memory/`，是跨会话、跨 agent 的共享结论库。
+
+- **开工先读 `.agent-memory/index.md`**。按状态分组：`待修` 优先；`规则` 和 `坑` 只看与本次改动影响面相关的部分。
+- **收工只写 `.agent-memory/<你的名字>/conclusions.md`**，追加到末尾，五字段缺一不可。
+- 永不修改别人的目录，永不手改 `index.md`。
+- 协议全文见 `.agent-memory/PROTOCOL.md`。
+
+已提供 MCP 工具，优先用工具而不是手拼路径：
+
+| 工具 | 作用 |
+|---|---|
+| `memory_init` | 建结构并刷新索引 |
+| `memory_read` | 读结论，可按 `status` / `area` 过滤 |
+| `memory_append` | 追加一条五字段结论并刷新索引 |
+| `memory_build` | 重新生成索引 |
+| `memory_validate` | 格式与合规自检 |
+
+项目还没初始化时，先运行 `memory_init`。`agent` 参数省略时使用 `AGENT_MEMORY_NAME`。

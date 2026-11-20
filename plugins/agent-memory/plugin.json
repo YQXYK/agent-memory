@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "agent-memory",
+  "version": "0.2.2",
+  "description": "多 agent 分片项目记忆：每个 agent 独占写自己的目录，工具聚合生成只读索引。",
+  "author": {
+    "name": "YQXYK",
+    "url": "https://github.com/YQXYK"
+  },
+  "homepage": "https://github.com/YQXYK/agent-memory#readme",
+  "repository": "https://github.com/YQXYK/agent-memory",
+  "license": "MIT",
+  "keywords": ["memory", "multi-agent", "context", "handoff", "mcp"]
+}

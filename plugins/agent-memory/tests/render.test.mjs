@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { indexMatches, renderIndex } from '../skills/project-memory/scripts/render.mjs';
+import { truncate } from '../skills/project-memory/scripts/lib.mjs';
 
 function entry(overrides = {}) {
   return {
@@ -39,4 +40,12 @@ test('30 天内的待修项不进长期列表', () => {
     now: new Date('2026-05-20T10:00:00'),
   });
   assert.doesNotMatch(out, /长期未处理的待修项/);
+});
+
+test('截断不会留下半截转义符，破坏表格列', () => {
+  // 7 个字符后正好是 ` |`，转义后的反斜杠落在截断点上。
+  const out = truncate(`${'a'.repeat(7)} | b`, 10);
+  assert.ok(out.endsWith('…'), out);
+  assert.equal((out.match(/\\/g) || []).length % 2, 0, `转义符成对：${out}`);
+  assert.doesNotMatch(out, /\\…$/);
 });

@@ -2,8 +2,8 @@
 
 多 agent 协作项目的**分片记忆**：每个 agent 独占写自己名下的目录，工具把各方结论聚合成一份只读索引。
 
-不绑定任何项目、语言、工具或 agent。Codex 与 Claude Code 可直接装插件，Cursor/Zed/Claude Desktop 走 MCP，
-其余 agent 用 CLI 或直接读写 Markdown。
+不绑定任何项目、语言、工具或 agent。Codex、Claude Code、Gemini CLI 与支持 Agent Plugins 1.0.0 的客户端可直接装插件，
+Cursor/Zed/Claude Desktop 走 MCP，其余 agent 用 CLI 或直接读写 Markdown。
 
 ## 为什么这么设计
 
@@ -60,7 +60,7 @@ node bin/agent-memory.mjs validate --strict    # 自检，CI 用
 node bin/agent-memory.mjs list --format json   # 给程序读
 ```
 
-环境变量可代替常用参数：`AGENT_MEMORY_NAME`、`AGENT_MEMORY_DIR`、`AGENT_MEMORY_ROOT`。
+环境变量可代替常用参数：`AGENT_MEMORY_NAME`、`AGENT_MEMORY_DIR`、`AGENT_MEMORY_ROOT`（空串视为未设置）。
 优先级是「命令行 > 环境变量 > 自动探测 > 默认值」，CLI 与 MCP 行为一致。
 
 `init` / `add` 的 agent 名没有默认值：不给 `--agent` 也没设 `AGENT_MEMORY_NAME` 就直接报错，
@@ -70,7 +70,7 @@ node bin/agent-memory.mjs list --format json   # 给程序读
 
 1. 在项目根运行 `agent-memory init --agent <名字>`（已经 init 过的项目，别的 agent 直接跑同一条命令即可）。
 2. 往 `.agent-memory/forbidden.txt` 填该项目的红线正则（没有就留空，不影响使用）。
-3. 把对应 agent 的接入片段贴进它的入口文件：`agent-memory template AGENTS --agent <名字>`（Claude 用 `CLAUDE`，Cursor 用 `cursor`，通用系统提示用 `system-prompt`）。
+3. 把对应 agent 的接入片段贴进它的入口文件：`agent-memory template AGENTS --agent <名字>`（Claude 用 `CLAUDE`，Gemini 用 `GEMINI`，Cursor 用 `cursor`，通用系统提示用 `system-prompt`）。
 4. 项目 `.gitignore` 加：
 
 ```gitignore
@@ -106,6 +106,32 @@ enabled = true
 
 插件自带 `.mcp.json`，装好后 `memory_read` / `memory_append` 等工具即可用。
 用 `AGENT_MEMORY_NAME` 固定身份（例如 `claude`），别让模型每次自己编名字。
+
+## 安装到 Gemini CLI
+
+仓库根有 `gemini-extension.json`，可以直接作为扩展安装：
+
+```bash
+gemini extensions install https://github.com/YQXYK/agent-memory
+```
+
+扩展会加载根目录的 `GEMINI.md` 作为上下文，并自动注册 `agent-memory` MCP server。
+默认 agent 名是 `gemini`，可用扩展设置里的 `AGENT_MEMORY_NAME` 覆盖；
+扩展设置还支持 `AGENT_MEMORY_DIR` / `AGENT_MEMORY_ROOT`，会一并注入 MCP server。
+升级用 `gemini extensions update agent-memory`，卸载用 `gemini extensions uninstall agent-memory`。
+
+## 安装到支持 Agent Plugins 的客户端
+
+`plugins/agent-memory/` 同时是一个符合 [Agent Plugins 1.0.0](https://agent-plugins.org/) 开放标准的插件包：
+
+| 文件 | 作用 |
+|---|---|
+| `plugin.json` | 插件元数据（名称、版本、作者、许可） |
+| `mcp.json` | 声明 `agent-memory` stdio MCP server |
+| `skills/project-memory/` | 提供给客户端的项目记忆 skill |
+
+支持该标准的客户端直接加载 `plugins/agent-memory/` 即可，无需为每个厂商维护单独清单。
+清单使用 `${PLUGIN_ROOT}` 定位脚本，不绑定安装路径。
 
 ## 安装到其他 agent
 
@@ -155,10 +181,11 @@ server 用 stdio，提供五个工具：
 ## 开发
 
 ```bash
-node --test plugins/agent-memory/tests/   # node:test，41 个用例，无第三方依赖
+node scripts/test.mjs   # node:test，59 个用例，无第三方依赖
 ```
 
-Windows PowerShell 若禁止运行 `npm.ps1`，用上面的 `node --test` 即可，无需 npm。
+测试入口会自己收集 `*.test.mjs`，兼容 Node 18/20/22；不要直接写 `node --test <目录>`，
+Node 22 会把目录当模块路径解析。Windows PowerShell 若禁止运行 `npm.ps1`，用上面的命令即可，无需 npm。
 CI 在 Ubuntu / Windows / macOS × Node 18 / 20 / 22 上跑同一套用例，外加一次端到端冒烟与索引可复现检查。
 
 ## 迁移已有记忆
@@ -169,4 +196,5 @@ CI 在 Ubuntu / Windows / macOS × Node 18 / 20 / 22 上跑同一套用例，外
 
 ## 变更日志
 
-见 [CHANGELOG.md](CHANGELOG.md)。版本号在根 `package.json`、插件 `package.json` 与两份插件清单里保持一致，CI 会校验。
+见 [CHANGELOG.md](CHANGELOG.md)。版本号在根 `package.json`、插件 `package.json`、Codex / Claude 插件清单、
+Claude marketplace、`gemini-extension.json` 与 Agent Plugins 的 `plugin.json` 里保持一致，CI 会校验。

@@ -19,7 +19,8 @@ export class UsageError extends Error {
 }
 
 export function normalizeDirName(name) {
-  const raw = name === undefined || name === null || name === '' ? DEFAULT_DIR : String(name);
+  const raw =
+    name === undefined || name === null || String(name).trim() === '' ? DEFAULT_DIR : String(name);
   const normalized = raw.trim().replace(/\\/g, '/').replace(/\/+$/, '');
   const parts = normalized.split('/');
   if (
@@ -58,7 +59,15 @@ export function parseArgs(argv, { booleans = [] } = {}) {
       if (eq !== -1) {
         const key = body.slice(0, eq);
         if (!key) throw new UsageError('参数名不能为空');
-        out[key] = body.slice(eq + 1);
+        const value = body.slice(eq + 1);
+        if (bools.has(key)) {
+          if (value === 'true') out[key] = true;
+          else if (value === 'false') out[key] = false;
+          else throw new UsageError(`--${key} 只接受 true 或 false`);
+        } else {
+          if (value === '') throw new UsageError(`--${key} 需要一个值`);
+          out[key] = value;
+        }
         continue;
       }
       const key = body;
@@ -67,6 +76,13 @@ export function parseArgs(argv, { booleans = [] } = {}) {
       if (next === undefined || next.startsWith('--')) {
         if (!bools.has(key)) throw new UsageError(`--${key} 需要一个值`);
         out[key] = true;
+      } else if (bools.has(key)) {
+        if (next === 'true') out[key] = true;
+        else if (next === 'false') out[key] = false;
+        // 不是 true/false 时按开关处理，把下一个词留给位置参数；
+        // 这样 `template --list AGENTS` 不会被误判成布尔值。
+        else out[key] = true;
+        if (next === 'true' || next === 'false') i++;
       } else {
         out[key] = next;
         i++;
@@ -83,8 +99,20 @@ export function parseArgs(argv, { booleans = [] } = {}) {
 export function requireValue(args, key, fallback) {
   const value = args[key];
   if (value === undefined) return fallback;
-  if (value === true || value === '') throw new UsageError(`--${key} 需要一个值`);
+  if (value === true || value === false || value === '') throw new UsageError(`--${key} 需要一个值`);
   return String(value);
+}
+
+/** 环境变量里的空串等同未设置，避免扩展注入 "" 后误报参数缺值。 */
+export function envValue(name) {
+  const value = process.env[name];
+  return value === undefined || value.trim() === '' ? undefined : value;
+}
+
+function samePath(a, b) {
+  const relative = path.relative(a, b);
+  // Windows 路径大小写不敏感，直接字符串比较会漏掉 C:\Users\A 与 C:\Users\a 这种差异。
+  return relative === '' || (process.platform === 'win32' && relative.toLowerCase() === '');
 }
 
 /**
@@ -95,7 +123,15 @@ export function requireValue(args, key, fallback) {
 export function findRoot(explicit, dirName = DEFAULT_DIR, { probe = true } = {}) {
   if (explicit !== undefined && explicit !== null) {
     if (explicit === true || explicit === '') throw new UsageError('--root 需要一个路径');
-    return path.resolve(String(explicit));
+    const resolved = path.resolve(String(explicit));
+    let stat;
+    try {
+      stat = fs.statSync(resolved);
+    } catch {
+      throw new UsageError(`--root 指向的目录不存在: ${resolved}`);
+    }
+    if (!stat.isDirectory()) throw new UsageError(`--root 不是目录: ${resolved}`);
+    return resolved;
   }
   const name = normalizeDirName(dirName);
   const cwd = process.cwd();
@@ -110,7 +146,7 @@ export function findRoot(explicit, dirName = DEFAULT_DIR, { probe = true } = {})
       const parent = path.dirname(dir);
       return parent === dir ? dir : parent;
     }
-    if (dir === home) return cwd;
+    if (samePath(dir, home)) return cwd;
     if (probe && detectMemoryDir(dir)) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) return cwd;
@@ -170,14 +206,20 @@ export function detectMemoryDir(root) {
         if (!ent.isDirectory() || SKIP_DIRS.has(ent.name)) continue;
         if (++scanned > PROBE_LIMIT) break;
         const child = path.join(dir, ent.name);
-        // 先看 index.md，一次 stat 就能排除绝大多数无关目录。
-        if (fs.existsSync(path.join(child, 'index.md')) && isMemoryDir(child)) hits.push(child);
+        // isMemoryDir 先 stat 再读 PROTOCOL.md，足以排除无关目录；
+        // 不能额外要求 index.md，否则 `init --no-build` 改过名的项目永远探测不到。
+        if (fs.existsSync(path.join(child, 'PROTOCOL.md')) && isMemoryDir(child)) {
+          hits.push(child);
+          // 命中记忆区后不再往里扫：agent 目录再多也不该算作候选。
+          continue;
+        }
         next.push(child);
       }
       if (scanned > PROBE_LIMIT) break;
     }
     if (hits.length === 1) return rel(root, hits[0]);
     if (hits.length > 1) return null;
+    if (scanned > PROBE_LIMIT) break;
     queue = next;
   }
   return null;
@@ -386,5 +428,10 @@ export function oneLine(s) {
 
 export function truncate(s, max) {
   const t = oneLine(s);
-  return t.length <= max ? t : t.slice(0, max - 1) + '…';
+  if (t.length <= max) return t;
+  let cut = t.slice(0, max - 1);
+  // 别把转义序列 `\|` 切成孤零零的反斜杠，否则表格列会被吞掉。
+  const trailing = /\\+$/.exec(cut);
+  if (trailing && trailing[0].length % 2 === 1) cut = cut.slice(0, -1);
+  return `${cut}…`;
 }

@@ -5,7 +5,7 @@ description: 项目根有 .agent-memory/ 目录时使用。读取跨会话、跨
 
 # 项目记忆
 
-`<skill-dir>` 是本 SKILL.md 所在目录，脚本都在 `scripts/` 下。用 `node` 运行（Windows 上若 `node` 不在 PATH，用 Codex 自带的 node）。
+`<skill-dir>` 是本 SKILL.md 所在目录，脚本都在 `scripts/` 下。用 PATH 里的 `node` 运行（Node 18+，无第三方依赖）。
 
 统一入口是 `scripts/cli.mjs`（或包里的 `agent-memory` 命令）。下面的 `agent-memory` 都指这个入口。
 
@@ -103,7 +103,7 @@ node <skill-dir>/scripts/cli.mjs validate
 | 方式 | 适合 | 用法 |
 |---|---|---|
 | CLI | 有 shell 的 agent | `agent-memory list/add/build/validate` |
-| MCP | Claude Code、Cursor、Zed 等 | `node scripts/mcp.mjs`，工具名 `memory_read` / `memory_append` / `memory_validate` |
+| MCP | Claude Code、Gemini CLI、Cursor、Zed 等 | `node scripts/mcp.mjs`，工具名 `memory_read` / `memory_append` / `memory_validate` |
 | 纯 Markdown | 只能读写文件的 agent | 直接按 `PROTOCOL.md` 读写 |
 
 ## 边界

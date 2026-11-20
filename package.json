@@ -1,6 +1,6 @@
 {
   "name": "agent-memory",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "多 agent 分片项目记忆：每个 agent 独占写自己的目录，工具聚合生成只读索引。支持 CLI / MCP / 纯 Markdown，不绑定任何 agent 或语言。",
   "license": "MIT",
   "type": "module",
@@ -13,12 +13,18 @@
   },
   "files": [
     "plugins/agent-memory/bin",
+    "plugins/agent-memory/package.json",
     "plugins/agent-memory/skills",
     "plugins/agent-memory/templates",
     "plugins/agent-memory/.codex-plugin",
     "plugins/agent-memory/.claude-plugin",
     "plugins/agent-memory/.mcp.json",
+    "plugins/agent-memory/plugin.json",
+    "plugins/agent-memory/mcp.json",
+    "gemini-extension.json",
+    "GEMINI.md",
     "plugins/agent-memory/LICENSE",
+    "scripts",
     "README.md",
     "INTEGRATION.md",
     "CHANGELOG.md"
@@ -39,7 +45,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test plugins/agent-memory/tests/",
+    "test": "node scripts/test.mjs",
     "mcp": "node plugins/agent-memory/skills/project-memory/scripts/mcp.mjs"
   },
   "keywords": [
@@ -51,6 +57,7 @@
     "mcp",
     "claude",
     "codex",
+    "gemini",
     "cursor"
   ]
 }

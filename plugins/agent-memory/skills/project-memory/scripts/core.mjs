@@ -151,7 +151,19 @@ export function loadMemory({ root, base }) {
   return { entries, problems, agents };
 }
 
+/**
+ * 只认带协议文件的目录。显式 --dir 指向普通目录时不能往里生成 index.md，
+ * 否则会在用户的项目里留下一个看起来像记忆区、实际没协议的空壳。
+ */
+export function ensureInitialized({ root, base }) {
+  const protocol = path.join(base, 'PROTOCOL.md');
+  if (!fs.existsSync(protocol)) {
+    throw new UsageError(`未找到 ${rel(root, protocol)}，先运行 init。`);
+  }
+}
+
 export function buildIndex({ root, base, dirName, check = false, now = new Date() }) {
+  ensureInitialized({ root, base });
   const { entries, problems, agents } = loadMemory({ root, base });
   const rendered = renderIndex({ entries, agents, dirName, now });
   const target = path.join(base, 'index.md');
@@ -291,6 +303,7 @@ function headingField(value) {
  */
 export function appendConclusion({ root, base, agent, date, category, title, status, conclusion, evidence, impact, expiry }) {
   checkAgentName(agent);
+  ensureInitialized({ root, base });
   const required = { 状态: status, 结论: conclusion, 证据: evidence, 影响面: impact, 失效条件: expiry };
   for (const [key, value] of Object.entries(required)) {
     if (!oneLineField(value)) throw new UsageError(`缺少字段: ${key}`);

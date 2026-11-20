@@ -4,9 +4,11 @@ import { test } from 'node:test';
 import { spawn } from 'node:child_process';
 import { cleanup, makeProject, read, scriptsDir } from './helpers.mjs';
 
-function startServer() {
+function startServer({ env = {}, cwd } = {}) {
   const child = spawn(process.execPath, [path.join(scriptsDir, 'mcp.mjs')], {
     stdio: ['pipe', 'pipe', 'pipe'],
+    cwd,
+    env: { ...process.env, ...env },
   });
   child.stdout.setEncoding('utf8');
   child.stderr.setEncoding('utf8');
@@ -22,7 +24,8 @@ function startServer() {
       const line = buffer.slice(0, nl).trim();
       buffer = buffer.slice(nl + 1);
       if (!line) continue;
-      const msg = JSON.parse(line);
+      const msg = parseLine(line);
+      if (!msg) continue;
       if (msg.id !== undefined && msg.id !== null && pending.has(msg.id)) {
         pending.get(msg.id)(msg);
         pending.delete(msg.id);
@@ -54,6 +57,15 @@ function payload(res) {
     return JSON.parse(body);
   } catch {
     return body;
+  }
+}
+
+/** 子进程被 kill 时可能读到半行，解析失败不该让测试直接崩掉。 */
+function parseLine(line) {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
   }
 }
 
@@ -111,6 +123,13 @@ test('MCP: 初始化、列工具、读写、校验全链路', async () => {
       await request('tools/call', { name: 'memory_read', arguments: { root, status: '坑' } }),
     );
     assert.equal(filtered.total, 0);
+
+    const badStatus = await request('tools/call', {
+      name: 'memory_read',
+      arguments: { root, status: '不存在' },
+    });
+    assert.equal(badStatus.result.isError, true);
+    assert.match(payload(badStatus), /只接受/);
 
     const validated = payload(await request('tools/call', { name: 'memory_validate', arguments: { root } }));
     assert.equal(validated.ok, true);
@@ -177,7 +196,8 @@ test('MCP: 用 AGENT_MEMORY_NAME 时可以不传 agent', async () => {
       const line = buffer.slice(0, nl).trim();
       buffer = buffer.slice(nl + 1);
       if (!line) continue;
-      const msg = JSON.parse(line);
+      const msg = parseLine(line);
+      if (!msg) continue;
       if (pending.has(msg.id)) {
         pending.get(msg.id)(msg);
         pending.delete(msg.id);
@@ -223,6 +243,80 @@ test('MCP: serverInfo 版本来自 package.json', async () => {
     assert.equal(init.result.serverInfo.name, 'agent-memory');
     assert.notEqual(init.result.serverInfo.version, '0.2.0-fallback');
     assert.match(init.result.serverInfo.version, /^\d+\.\d+\.\d+/);
+  } finally {
+    child.kill();
+    cleanup(root);
+  }
+});
+
+test('MCP: 空的记忆环境变量仍能自动探测项目根', async () => {
+  const root = makeProject();
+  const { child, request } = startServer({
+    cwd: root,
+    env: { AGENT_MEMORY_ROOT: '', AGENT_MEMORY_DIR: '' },
+  });
+  try {
+    await request('initialize', { protocolVersion: '2024-11-05', capabilities: {} });
+    const init = payload(
+      await request('tools/call', { name: 'memory_init', arguments: { agent: 'gemini' } }),
+    );
+    assert.equal(init.root, root);
+
+    const readBack = payload(
+      await request('tools/call', { name: 'memory_read', arguments: {} }),
+    );
+    assert.equal(readBack.dir, '.agent-memory');
+  } finally {
+    child.kill();
+    if (child.exitCode === null) {
+      await new Promise((resolve) => child.once('exit', resolve));
+    }
+    cleanup(root);
+  }
+});
+
+test('MCP: 不传 dir 时能自动认出改名的记忆目录', async () => {
+  const root = makeProject();
+  const { child, request } = startServer();
+  try {
+    await request('initialize', { protocolVersion: '2024-11-05', capabilities: {} });
+    await request('tools/call', {
+      name: 'memory_init',
+      arguments: { agent: 'claude', root, dir: '.team-memory' },
+    });
+
+    const readBack = payload(await request('tools/call', { name: 'memory_read', arguments: { root } }));
+    assert.equal(readBack.dir, '.team-memory');
+  } finally {
+    child.kill();
+    cleanup(root);
+  }
+});
+
+test('MCP: markdown 输出遵守 status 过滤', async () => {
+  const root = makeProject();
+  const { child, request } = startServer();
+  try {
+    await request('initialize', { protocolVersion: '2024-11-05', capabilities: {} });
+    await request('tools/call', { name: 'memory_init', arguments: { agent: 'claude', root } });
+    const base = {
+      agent: 'claude',
+      root,
+      conclusion: 'c',
+      evidence: 'e:1',
+      impact: 'i',
+      expiry: 'x',
+    };
+    await request('tools/call', { name: 'memory_append', arguments: { ...base, title: '规则条目', status: '规则' } });
+    await request('tools/call', { name: 'memory_append', arguments: { ...base, title: '待修条目', status: '待修' } });
+
+    const md = await request('tools/call', {
+      name: 'memory_read',
+      arguments: { root, format: 'markdown', status: '待修' },
+    });
+    const body = md.result.content[0].text;
+    assert.match(body, /待修条目/);
+    assert.doesNotMatch(body, /规则条目/);
   } finally {
     child.kill();
     cleanup(root);

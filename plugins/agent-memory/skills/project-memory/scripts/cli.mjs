@@ -4,7 +4,9 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   DEFAULT_DIR,
+  STATUSES,
   UsageError,
+  envValue,
   localDate,
   parseArgs,
   rel,
@@ -51,13 +53,13 @@ const TEMPLATE_DIR = path.resolve(
 );
 
 function context(args) {
-  const dirName = requireValue(args, 'dir', process.env.AGENT_MEMORY_DIR || undefined);
-  const root = requireValue(args, 'root', process.env.AGENT_MEMORY_ROOT || undefined);
+  const dirName = requireValue(args, 'dir', envValue('AGENT_MEMORY_DIR'));
+  const root = requireValue(args, 'root', envValue('AGENT_MEMORY_ROOT'));
   return resolveContext({ root, dirName });
 }
 
 function agentName(args) {
-  return requireValue(args, 'agent', process.env.AGENT_MEMORY_NAME || undefined);
+  return requireValue(args, 'agent', envValue('AGENT_MEMORY_NAME'));
 }
 
 function printFindings(findings) {
@@ -155,9 +157,12 @@ function cmdList(args) {
     console.error(`未找到 ${ctx.base}，先运行 init。`);
     return 2;
   }
-  const { entries, agents } = buildIndex({ ...ctx, check: true });
   const status = args.status === true ? null : args.status;
   const area = args.area === true ? null : args.area;
+  if (status && !STATUSES.includes(status)) {
+    throw new UsageError(`--status 只接受 ${STATUSES.join(' / ')}，收到 "${status}"`);
+  }
+  const { entries, agents } = buildIndex({ ...ctx, check: true });
   const items = entries.filter((e) => {
     if (status && e.status !== status) return false;
     if (area && !String(e.fields['影响面'] || '').includes(area)) return false;
@@ -225,7 +230,8 @@ function cmdTemplate(args) {
     return 2;
   }
   // 没给 agent 就保留占位符，让使用者自己填，别替他猜一个身份。
-  const agent = args.agent || process.env.AGENT_MEMORY_NAME || null;
+  const requested = args.agent || envValue('AGENT_MEMORY_NAME');
+  const agent = requested ? checkAgentName(String(requested)) : null;
   const body = fs
     .readFileSync(path.join(TEMPLATE_DIR, match), 'utf8')
     .replaceAll('<你的名字>', agent ?? '<你的名字>')
@@ -244,6 +250,7 @@ function findTemplate(names, target) {
     agents: 'AGENTS.md.snippet',
     agent: 'AGENTS.md.snippet',
     claude: 'CLAUDE.md.snippet',
+    gemini: 'GEMINI.md.snippet',
     cursor: 'cursor-rules.mdc',
     rules: 'cursor-rules.mdc',
     prompt: 'system-prompt.snippet.txt',
@@ -288,6 +295,10 @@ function dispatch(argv) {
     console.log(USAGE);
     return 0;
   }
+  const maxPositional = command === 'template' ? 1 : 0;
+  if (args._.length > maxPositional) {
+    throw new UsageError(`${command} 不接受多余的位置参数: ${args._.slice(maxPositional).join(' ')}`);
+  }
 
   switch (command) {
     case 'init':
@@ -331,7 +342,12 @@ const invokedDirectly =
 if (invokedDirectly) {
   const code = runCli(process.argv.slice(2));
   if (code === 'mcp') {
-    await import('./mcp.mjs');
+    try {
+      await import('./mcp.mjs');
+    } catch (err) {
+      console.error(`错误: ${err && err.message ? err.message : err}`);
+      process.exitCode = 1;
+    }
   } else {
     process.exitCode = code;
   }

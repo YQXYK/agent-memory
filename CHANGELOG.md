@@ -2,6 +2,32 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [0.2.2] - 2026-11-20
+
+### 新增
+
+- Gemini CLI 扩展清单 `gemini-extension.json`、根 `GEMINI.md` 与 `GEMINI.md.snippet` 模板。
+- `scripts/test.mjs` 跨版本测试入口：兼容 Node 18/20/22，CI 不再因 Node 22 把目录当模块而失败。
+- Agent Plugins 1.0.0 开放标准清单 `plugins/agent-memory/plugin.json` 与 `mcp.json`，
+  支持该标准的客户端可直接加载 `plugins/agent-memory/`。
+
+### 修复
+
+- `build` / `build --check` / `list` 指向未初始化的普通目录时直接报错，不再往用户目录里生成 `index.md`。
+- MCP `memory_read` 收到非法 `status` 时返回错误，不再静默返回空结果。
+- 空的环境变量（`AGENT_MEMORY_NAME` / `AGENT_MEMORY_DIR` / `AGENT_MEMORY_ROOT`）等同未设置，CLI 与 MCP 均能自动探测项目根，不再误报参数缺值。
+- Gemini 扩展的 `AGENT_MEMORY_NAME` 可被设置覆盖，`AGENT_MEMORY_DIR` / `AGENT_MEMORY_ROOT` 会注入 MCP server。
+- `build --check true|false` 这类空格传值的布尔参数不再被当成字符串，非法值直接报错。
+- `add` 在未初始化的目录里直接报错，不再留下没有 `PROTOCOL.md` / `forbidden.txt` 的半套结构。
+- `list --status <非法值>` 报错，不再静默返回空列表。
+- MCP 不传 `dir` 时能自动识别改名后的记忆目录。
+- `memory_read --format markdown` 带过滤时返回现渲染结果，而不是旧索引快照。
+- 截断长标题时不会切断 `\|` 转义，表格列不再错位。
+
+### 变更
+
+- 插件描述、README 与接入文档去掉 Codex 专属表述，统一为 CLI / MCP / 纯 Markdown 三种通用接入方式。
+
 ## [0.2.1] - 2026-11-20
 
 ### 修复

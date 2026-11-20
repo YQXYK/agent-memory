@@ -1,0 +1,35 @@
+{
+  "name": "agent-memory",
+  "version": "0.2.2",
+  "description": "多 agent 分片项目记忆：每个 agent 独占写自己的目录，工具聚合生成只读索引。",
+  "contextFileName": "GEMINI.md",
+  "mcpServers": {
+    "agent-memory": {
+      "command": "node",
+      "args": ["${extensionPath}/plugins/agent-memory/skills/project-memory/scripts/mcp.mjs"],
+      "cwd": "${workspacePath}",
+      "env": {
+        "AGENT_MEMORY_NAME": "${AGENT_MEMORY_NAME:-gemini}",
+        "AGENT_MEMORY_DIR": "${AGENT_MEMORY_DIR:-}",
+        "AGENT_MEMORY_ROOT": "${AGENT_MEMORY_ROOT:-}"
+      }
+    }
+  },
+  "settings": [
+    {
+      "name": "Agent name",
+      "description": "写记忆时使用的 agent 名（小写字母/数字/短横线）。",
+      "envVar": "AGENT_MEMORY_NAME"
+    },
+    {
+      "name": "Memory directory",
+      "description": "记忆目录名，默认 .agent-memory。",
+      "envVar": "AGENT_MEMORY_DIR"
+    },
+    {
+      "name": "Project root",
+      "description": "项目根目录，留空则从 cwd 向上自动探测。",
+      "envVar": "AGENT_MEMORY_ROOT"
+    }
+  ]
+}

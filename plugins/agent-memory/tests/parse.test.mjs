@@ -24,6 +24,17 @@ test('parseArgs 支持 --key=value', () => {
   assert.deepEqual(parseArgs(['--agent=codex', '--dir=.team']), { _: [], agent: 'codex', dir: '.team' });
 });
 
+test('parseArgs 的布尔参数只接受 true/false，空值报错', () => {
+  assert.deepEqual(parseArgs(['--check=true'], { booleans: ['check'] }), { _: [], check: true });
+  assert.deepEqual(parseArgs(['--check=false'], { booleans: ['check'] }), { _: [], check: false });
+  assert.deepEqual(parseArgs(['--check', 'true'], { booleans: ['check'] }), { _: [], check: true });
+  assert.deepEqual(parseArgs(['--check', 'false'], { booleans: ['check'] }), { _: [], check: false });
+  assert.throws(() => parseArgs(['--check=no'], { booleans: ['check'] }), UsageError);
+  // 非 true/false 的词留给位置参数，由命令层判断是否合法。
+  assert.deepEqual(parseArgs(['--list', 'AGENTS'], { booleans: ['list'] }), { _: ['AGENTS'], list: true });
+  assert.throws(() => parseArgs(['--agent='], { booleans: ['check'] }), UsageError);
+});
+
 test('normalizeDirName 只接受项目内相对目录', () => {
   assert.equal(normalizeDirName(undefined), '.agent-memory');
   assert.equal(normalizeDirName(' .team-memory/ '), '.team-memory');

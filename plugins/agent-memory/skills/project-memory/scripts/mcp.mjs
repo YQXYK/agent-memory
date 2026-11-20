@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { DEFAULT_DIR, UsageError, localDate, readText } from './lib.mjs';
+import { DEFAULT_DIR, STATUSES, UsageError, envValue, localDate, readText } from './lib.mjs';
 import {
   appendConclusion,
   buildIndex,
@@ -16,7 +16,7 @@ import {
   resolveContext,
   validateProject,
 } from './core.mjs';
-import { indexMatches } from './render.mjs';
+import { indexMatches, renderIndex } from './render.mjs';
 
 const require = createRequire(import.meta.url);
 const pkg = (() => {
@@ -24,7 +24,7 @@ const pkg = (() => {
     // scripts/ -> project-memory/ -> skills/ -> 包根
     return require('../../../package.json');
   } catch {
-    return { name: 'agent-memory', version: '0.2.0' };
+    return { name: 'agent-memory', version: '0.0.0' };
   }
 })();
 
@@ -44,7 +44,7 @@ const S = {
 
 // 建议客户端用 AGENT_MEMORY_NAME 固定身份，别让模型每次自己编名字。
 function agentOf(args) {
-  return checkAgentName(args.agent || process.env.AGENT_MEMORY_NAME);
+  return checkAgentName(args.agent || envValue('AGENT_MEMORY_NAME'));
 }
 
 const TOOLS = [
@@ -107,9 +107,11 @@ const TOOLS = [
 ];
 
 function ctxOf(args = {}) {
+  // 不传 dir 时交给 resolveContext 自动识别：写死默认名会让改过目录名的项目找不到记忆区。
   return resolveContext({
-    root: args.root || process.env.AGENT_MEMORY_ROOT,
-    dirName: args.dir || process.env.AGENT_MEMORY_DIR || DEFAULT_DIR,
+    // 扩展/客户端可能注入空字符串，不能把 "" 当成显式 --root。
+    root: args.root || envValue('AGENT_MEMORY_ROOT'),
+    dirName: args.dir || envValue('AGENT_MEMORY_DIR'),
   });
 }
 
@@ -139,15 +141,22 @@ const HANDLERS = {
     if (!fs.existsSync(ctx.base)) {
       throw new UsageError(`未找到 ${ctx.base}，先调用 memory_init`);
     }
-    const { entries, agents } = buildIndex({ ...ctx, check: true });
+    if (args.status && !STATUSES.includes(args.status)) {
+      throw new UsageError(`status 只接受 ${STATUSES.join(' / ')}，收到 "${args.status}"`);
+    }
+    const built = buildIndex({ ...ctx, check: true });
+    const { entries, agents } = built;
     const items = entries.filter((e) => {
       if (args.status && e.status !== args.status) return false;
       if (args.area && !String(e.fields['影响面'] || '').includes(args.area)) return false;
       return true;
     });
     if (args.format === 'markdown') {
+      // 带过滤条件时现渲染一份，否则调用方会拿到未过滤的全量索引。
+      if (items.length !== entries.length) {
+        return text(renderIndex({ entries: items, agents, dirName: ctx.dirName }));
+      }
       const indexFile = path.join(ctx.base, 'index.md');
-      const built = buildIndex({ ...ctx, check: true });
       if (!fs.existsSync(indexFile)) return text(built.rendered);
       const current = readText(indexFile);
       // 索引过期时返回现算的结果，别把旧快照当真相喂给模型。

@@ -1,6 +1,6 @@
 {
   "name": "agent-memory",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "多 agent 协作项目的分片记忆：每个 agent 独占写自己的目录，工具聚合生成只读索引。不绑定任何 agent。",
   "author": {
     "name": "YQXYK",
@@ -14,14 +14,15 @@
     "multi-agent",
     "context",
     "handoff",
-    "codex-plugin",
+    "agent-plugin",
+    "gemini-extension",
     "mcp"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Agent Memory",
     "shortDescription": "分片项目记忆",
-    "longDescription": "在任意项目根建立 .agent-memory/ 记忆区：每个 agent 只写自己名下的目录，工具把各方结论聚合成一份只读索引供所有 agent 读取。用于跨会话、跨 agent 传递项目约束、踩坑与待修项。不绑定具体项目、语言、工具或 agent——Codex 走插件，Claude/Cursor/Zed 走 MCP 或 CLI，其余 agent 直接读写 Markdown 协议。",
+    "longDescription": "在任意项目根建立 .agent-memory/ 记忆区：每个 agent 只写自己名下的目录，工具把各方结论聚合成一份只读索引供所有 agent 读取。用于跨会话、跨 agent 传递项目约束、踩坑与待修项。不绑定具体项目、语言、工具或 agent——Codex、Claude Code、Gemini CLI 可装插件，Cursor/Zed 等走 MCP，其余 agent 用 CLI 或直接读写 Markdown 协议。",
     "developerName": "agent-memory",
     "category": "Developer Tools",
     "capabilities": [

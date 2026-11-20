@@ -17,6 +17,19 @@
 `root` / `dir` / `agent` 三个参数在 CLI 与 MCP 里都可省略：`root` 从 cwd 向上找 `.git` 或记忆目录，
 `dir` 会自动认出改过名的目录，`agent` 回落到 `AGENT_MEMORY_NAME`。用环境变量固定身份，比让模型每次传参可靠。
 
+## Agent Plugins 开放标准
+
+`plugins/agent-memory/` 是符合 Agent Plugins 1.0.0 的插件根，同时保留 Codex / Claude Code / Gemini CLI 的原生清单：
+
+| 文件 | 作用 |
+|---|---|
+| `plugin.json` | 开放标准元数据 |
+| `mcp.json` | 开放标准 MCP server 声明，脚本路径用 `${PLUGIN_ROOT}` |
+| `skills/project-memory/` | 标准 skill 目录，含 `SKILL.md` 与脚本 |
+| `.codex-plugin/`、`.claude-plugin/`、`.mcp.json` | 厂商原生清单，向后兼容 |
+
+支持 Agent Plugins 的客户端直接加载该目录；其他客户端继续按下面的方式接入。
+
 ## 通用接入片段
 
 贴进目标项目的 `AGENTS.md` / `CLAUDE.md` / `.cursor/rules` / 系统提示词，或该 agent 的等价入口文件。
@@ -39,6 +52,7 @@
 |---|---|
 | `AGENTS.md.snippet` | Codex、以及任何读 `AGENTS.md` 的 agent |
 | `CLAUDE.md.snippet` | Claude Code |
+| `GEMINI.md.snippet` | Gemini CLI |
 | `cursor-rules.mdc` | Cursor 的 project rules |
 | `system-prompt.snippet.txt` | 没有约定入口文件的 agent，贴进系统提示 |
 | `mcp.claude-desktop.json` | Claude Desktop 的 MCP 配置 |
@@ -48,7 +62,7 @@
 
 同一个 agent 跨会话固定用同一个名字，不要每次换，否则目录会散成一堆。
 
-建议直接用工具名：`codex`、`claude`、`cursor`、`workbuddy`、`dsh`。
+建议直接用工具名：`codex`、`claude`、`gemini`、`cursor`、`workbuddy`、`dsh`。
 名字只能是小写字母、数字、短横线，最长 32。
 
 ## 不共享写点
@@ -77,6 +91,21 @@ node <repo>/plugins/agent-memory/bin/agent-memory.mjs template CLAUDE --agent cl
 ```bash
 node <repo>/plugins/agent-memory/bin/agent-memory.mjs init --agent cursor
 node <repo>/plugins/agent-memory/bin/agent-memory.mjs template cursor --agent cursor > .cursor/rules/agent-memory.mdc
+```
+
+**Gemini CLI**
+
+```bash
+gemini extensions install https://github.com/YQXYK/agent-memory
+```
+
+扩展自带 `GEMINI.md` 上下文与 MCP server，默认 agent 名为 `gemini`。
+设置项 `AGENT_MEMORY_NAME` / `AGENT_MEMORY_DIR` / `AGENT_MEMORY_ROOT` 会覆盖默认值并注入 MCP server。
+不用扩展时，退回 CLI 方式：
+
+```bash
+node <repo>/plugins/agent-memory/bin/agent-memory.mjs init --agent gemini
+node <repo>/plugins/agent-memory/bin/agent-memory.mjs template GEMINI --agent gemini >> GEMINI.md
 ```
 
 **Claude Desktop / 其他 MCP 客户端**
